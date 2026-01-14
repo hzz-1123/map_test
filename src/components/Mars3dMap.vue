@@ -116,6 +116,12 @@
         <span class="coord-value">{{ mouseCoord.alt }}</span>
       </span>
     </div>
+
+    <!-- 安全等级图例 -->
+    <SecurityLegend v-if="currentLayer === 'security'" />
+
+    <!-- 事件频次图例 -->
+    <EventFrequencyLegend v-if="currentLayer === 'event'" />
     
     <div id="mars3dContainer" class="map-container"></div>
   </div>
@@ -133,6 +139,9 @@ import CountryDetailPanel from "./CountryDetailPanel.vue";
 import EventTimeline from "./EventTimeline.vue";
 import LeftDrawer from "./LeftDrawer.vue";
 import RightDrawer from "./RightDrawer.vue";
+import SecurityLegend from "./SecurityLegend.vue";
+import EventFrequencyLegend from "./EventFrequencyLegend.vue";
+import { getCountryFrequencyColor } from "@/data/eventFrequency";
 
 export default {
   name: "Mars3dMap",
@@ -141,7 +150,9 @@ export default {
     CountryDetailPanel,
     EventTimeline,
     LeftDrawer,
-    RightDrawer
+    RightDrawer,
+    SecurityLegend,
+    EventFrequencyLegend
   },
   data() {
     return {
@@ -603,23 +614,33 @@ export default {
           (this.focusedCountry?.code === "CHN" && code === "TWN"); // 台湾属于中国
         
         if (!isSelected && !isFocused) {
-          event.graphic.setStyle({
-            color: "#ffffff",
-            opacity: 0.01
-          });
+          // 根据当前图层模式恢复颜色
+          const restoreStyle = this.getCountryStyle(event.graphic.attr["ISO3166-1-Alpha-3"]);
+          event.graphic.setStyle(restoreStyle);
           
           // 如果是中国或台湾，同时恢复另一个
           if (code === "CHN") {
             const otherGraphic = isTaiwan ? this.getChinaGraphic() : this.getTaiwanGraphic();
             if (otherGraphic) {
-              otherGraphic.setStyle({
-                color: "#ffffff",
-                opacity: 0.01
-              });
+              const otherCode = isTaiwan ? "CHN" : "TWN";
+              const otherStyle = this.getCountryStyle(otherCode);
+              otherGraphic.setStyle(otherStyle);
             }
           }
         }
       });
+    },
+
+    // 根据当前图层获取国家样式
+    getCountryStyle(countryCode) {
+      if (this.currentLayer === 'security') {
+        const color = getCountrySecurityColor(countryCode);
+        return { color: color, opacity: 0.6, outline: true, outlineColor: "#ffffff", outlineWidth: 1 };
+      } else if (this.currentLayer === 'event') {
+        const color = getCountryFrequencyColor(countryCode);
+        return { color: color, opacity: 0.7, outline: true, outlineColor: "#ffffff", outlineWidth: 1 };
+      }
+      return { color: "#ffffff", opacity: 0.01, outline: true, outlineColor: "#ffffff", outlineWidth: 1 };
     },
 
     // 获取台湾的 graphic 对象
@@ -1017,12 +1038,10 @@ export default {
         const code = graphic.attr?.["ISO3166-1-Alpha-3"];
         if (code) {
           const color = getCountrySecurityColor(code);
-          const level = getSecurityLevel(code);
-          const opacity = level === 0 ? 0.2 : 0.5;
           
           graphic.setStyle({
             color: color,
-            opacity: opacity,
+            opacity: 0.6,
             outline: true,
             outlineColor: "#ffffff",
             outlineWidth: 1
@@ -1031,30 +1050,24 @@ export default {
       });
     },
 
-    // 应用事件频次图层（模拟数据）
+    // 应用事件频次图层（热力图）
     applyEventLayer() {
       if (!this.countryLayer) return;
       
       const graphics = this.countryLayer.getGraphics();
       graphics.forEach(graphic => {
-        // 模拟事件频次，实际应从数据获取
-        const eventCount = Math.random();
-        let color;
-        if (eventCount > 0.7) {
-          color = "#e65100";
-        } else if (eventCount > 0.4) {
-          color = "#ff9800";
-        } else {
-          color = "#fff3e0";
+        const code = graphic.attr?.["ISO3166-1-Alpha-3"];
+        if (code) {
+          const color = getCountryFrequencyColor(code);
+          
+          graphic.setStyle({
+            color: color,
+            opacity: 0.7,
+            outline: true,
+            outlineColor: "#ffffff",
+            outlineWidth: 1
+          });
         }
-        
-        graphic.setStyle({
-          color: color,
-          opacity: 0.5,
-          outline: true,
-          outlineColor: "#ffffff",
-          outlineWidth: 1
-        });
       });
     },
 
@@ -1299,7 +1312,7 @@ export default {
 /* 概览图样式 */
 .overview-map {
   position: absolute;
-  z-index: 999;
+  z-index: 1500;
   width: 500px;
   height: 400px;
   background: rgba(15, 23, 42, 0.95);
@@ -1320,6 +1333,8 @@ export default {
   font-size: 12px;
   border-bottom: 1px solid rgba(100, 150, 255, 0.2);
   cursor: move;
+  position: relative;
+  z-index: 10;
 }
 
 .overview-close {
@@ -1332,6 +1347,7 @@ export default {
   align-items: center;
   justify-content: center;
   border-radius: 2px;
+  z-index: 11;
 }
 
 .overview-close:hover {
