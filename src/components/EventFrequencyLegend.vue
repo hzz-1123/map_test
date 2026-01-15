@@ -30,12 +30,12 @@ export default {
 <style scoped>
 .frequency-legend {
   position: absolute;
-  right: 10px;
-  bottom: 250px;
+  right: 20px;
+  bottom: 60px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 12px 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   z-index: 996;
   min-width: 120px;
 }

@@ -1,20 +1,24 @@
 <template>
-  <aside :class="['right-drawer', { open: drawerOpen }]">
-    <div class="drawer-collapsed-right" v-if="!drawerOpen" @click="drawerOpen = true">
-      <span class="collapse-icon">‹</span>
+  <div :class="['right-drawer-wrapper', { collapsed: isCollapsed }]">
+    <!-- 伸缩按钮（固定位置） -->
+    <div class="toggle-btn" @click="toggleDrawer">
+      <span class="toggle-arrow">{{ isCollapsed ? '‹' : '›' }}</span>
     </div>
-    <div class="drawer-content-right" v-else>
-      <button 
-        v-for="item in rightTools" 
-        :key="item.id"
-        :class="['tool-btn-right', { active: activeTool === item.id }]"
-        @click="selectTool(item.id)"
-      >
-        {{ item.label }}
-      </button>
-      <button class="tool-btn-right collapse-btn-right" @click="drawerOpen = false">›</button>
+    
+    <!-- 抽屉内容 -->
+    <div :class="['drawer-content', { collapsed: isCollapsed }]">
+      <div class="drawer-menu">
+        <div 
+          v-for="item in menuItems" 
+          :key="item.id"
+          :class="['menu-item', { active: activeItem === item.id }]"
+          @click="selectItem(item.id)"
+        >
+          <span class="menu-text">{{ item.name }}</span>
+        </div>
+      </div>
     </div>
-  </aside>
+  </div>
 </template>
 
 <script>
@@ -22,36 +26,36 @@ export default {
   name: "RightDrawer",
   data() {
     return {
-      drawerOpen: false,
-      activeTool: 'country',
-      rightTools: [
-        { id: 'country', label: '国家' },
-        { id: 'military', label: '军事' },
-        { id: 'policy', label: '政策' },
-        { id: 'diplomacy', label: '外交' },
-        { id: 'security', label: '安全' },
-        { id: 'economy', label: '经济' },
-        { id: 'tech', label: '科技' }
+      isCollapsed: false,
+      activeItem: 'country',
+      menuItems: [
+        { id: 'country', name: '国家' },
+        { id: 'military', name: '军事' },
+        { id: 'policy', name: '政策' },
+        { id: 'diplomatic', name: '外交' },
+        { id: 'security', name: '安全' },
+        { id: 'economic', name: '经济' },
+        { id: 'tech', name: '科技' }
       ]
     };
   },
   methods: {
-    selectTool(id) {
-      this.activeTool = id;
+    toggleDrawer() {
+      this.isCollapsed = !this.isCollapsed;
+      this.$emit('toggle', this.isCollapsed);
+    },
+    selectItem(id) {
+      this.activeItem = id;
       this.$emit('select', id);
-    }
-  },
-  watch: {
-    drawerOpen(val) {
-      this.$emit('toggle', !val);
     }
   }
 };
 </script>
 
 <style scoped>
-.right-drawer {
+.right-drawer-wrapper {
   position: absolute;
+  top: 150px;
   right: 0;
   z-index: 999;
   display: flex;
@@ -136,16 +140,8 @@ export default {
   border-right: none;
   border-radius: 6px 0 0 6px;
   display: flex;
-  flex-direction: column;
-  width: 70px;
-}
-
-.tool-btn-right {
-  width: 70px;
-  padding: 18px 0;
-  background: #3d4a5c;
-  border: none;
-  border-bottom: 1px solid #4a5a6e;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: background 0.2s;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
