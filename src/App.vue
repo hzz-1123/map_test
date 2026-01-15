@@ -1,26 +1,28 @@
 <template>
-  <div id="app">
-    <AMapComponent />
-  </div>
+    <div id="app">
+        <leafletMap />
+    </div>
 </template>
 
 <script>
-import AMapComponent from './components/AMapComponent.vue';
+import leafletMap from "./components/leafletMap.vue";
 
 export default {
-  name: 'App',
-  components: {
-    AMapComponent
-  }
+    name: "App",
+    components: {
+        leafletMap,
+    },
 };
 </script>
 
 <style>
-html, body, #app {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+html,
+body,
+#app {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
 }
 </style>
