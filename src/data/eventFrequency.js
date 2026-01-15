@@ -1,6 +1,6 @@
 // 事件发生频次数据
 export const eventFrequency = {
-  "CHN": 450,  // 中国
+  "CHN": 450,  // 中国（含台湾）
   "USA": 380,  // 美国
   "RUS": 320,  // 俄罗斯
   "JPN": 280,  // 日本
@@ -9,7 +9,6 @@ export const eventFrequency = {
   "PRK": 120,  // 朝鲜
   "VNM": 80,   // 越南
   "PHL": 60,   // 菲律宾
-  "TWN": 450,  // 台湾（属于中国）
   "MYS": 40,   // 马来西亚
   "IDN": 90,   // 印度尼西亚
   "THA": 50,   // 泰国
@@ -58,11 +57,11 @@ export function getEventFrequency(countryCode) {
 // 根据频次获取颜色
 export function getFrequencyColor(count) {
   if (count > 400) return frequencyColors.level7;
-  if (count > 300) return frequencyColors.level6;
-  if (count > 200) return frequencyColors.level5;
-  if (count > 100) return frequencyColors.level4;
-  if (count > 50) return frequencyColors.level3;
-  if (count > 0) return frequencyColors.level2;
+  if (count >= 31 && count <= 400) return frequencyColors.level6;
+  if (count >= 21 && count <= 30) return frequencyColors.level5;
+  if (count >= 11 && count <= 20) return frequencyColors.level4;
+  if (count >= 6 && count <= 10) return frequencyColors.level3;
+  if (count >= 1 && count <= 5) return frequencyColors.level2;
   return frequencyColors.level1;
 }
 

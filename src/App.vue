@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <AMapComponent />
     <LeafletMap />
   </div>
 </template>

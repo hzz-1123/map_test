@@ -223,14 +223,18 @@ export default {
   left: 0;
   right: 0;
   z-index: 997;
-  background: rgba(15, 23, 42, 0.95);
-  border-top: 1px solid rgba(100, 150, 255, 0.3);
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(200, 200, 200, 0.3);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
 
 .event-timeline-wrapper.collapsed {
   background: transparent;
   border-top: none;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 /* 折叠按钮 */
@@ -243,30 +247,32 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 4px 16px;
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid rgba(100, 150, 255, 0.3);
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.8));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(200, 200, 200, 0.3);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
   cursor: pointer;
   z-index: 998;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .collapse-arrow {
-  color: #4fc3f7;
+  color: #3b82f6;
   font-size: 10px;
 }
 
 .collapse-text {
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 12px;
 }
 
 .collapse-toggle:hover {
-  background: rgba(51, 65, 85, 0.95);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .collapse-toggle:hover .collapse-text {
-  color: #e2e8f0;
+  color: #374151;
 }
 
 /* 内容区域 */
@@ -288,11 +294,11 @@ export default {
 }
 
 .header-title {
-  color: #e2e8f0;
+  color: #1f2937;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   padding-left: 8px;
-  border-left: 3px solid #2196f3;
+  border-left: 3px solid #3b82f6;
 }
 
 .header-right {
@@ -303,11 +309,16 @@ export default {
 
 .filter-select, .date-input, .search-input {
   padding: 5px 10px;
-  background: rgba(51, 65, 85, 0.8);
-  border: 1px solid rgba(100, 150, 255, 0.3);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(200, 200, 200, 0.5);
   border-radius: 4px;
-  color: #e2e8f0;
+  color: #374151;
   font-size: 12px;
+}
+
+.filter-select:focus, .date-input:focus, .search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
 }
 
 .filter-select.small {
@@ -319,37 +330,39 @@ export default {
 }
 
 .date-separator {
-  color: #64748b;
+  color: #6b7280;
   font-size: 12px;
 }
 
 .filter-btn {
   padding: 5px 12px;
-  background: rgba(51, 65, 85, 0.8);
-  border: 1px solid rgba(100, 150, 255, 0.3);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(200, 200, 200, 0.5);
   border-radius: 4px;
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .filter-btn:hover {
-  background: rgba(71, 85, 105, 0.9);
-  color: #e2e8f0;
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #3b82f6;
 }
 
 .filter-btn.highlight {
-  background: rgba(33, 150, 243, 0.6);
-  border-color: #2196f3;
+  background: linear-gradient(to right, rgba(59, 130, 246, 0.8), rgba(59, 130, 246, 0.6));
+  border-color: #3b82f6;
   color: #fff;
 }
 
 /* 国家标题 */
 .country-title {
   text-align: center;
-  color: #4fc3f7;
-  font-size: 14px;
+  color: #1e40af;
+  font-size: 15px;
+  font-weight: 600;
   margin-bottom: 12px;
 }
 
@@ -414,9 +427,9 @@ export default {
 
 /* 年份标签 */
 .year-label {
-  color: #64748b;
+  color: #374151;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   margin-top: 8px;
   padding-left: 2px;
 }
@@ -428,7 +441,7 @@ export default {
   left: 40px;
   right: 40px;
   height: 2px;
-  background: rgba(100, 150, 255, 0.4);
+  background: rgba(59, 130, 246, 0.4);
   z-index: 1;
 }
 </style>
