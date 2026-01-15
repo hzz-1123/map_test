@@ -1,16 +1,17 @@
 <template>
   <div id="app">
     <AMapComponent />
+    <LeafletMap />
   </div>
 </template>
 
 <script>
-import AMapComponent from './components/AMapComponent.vue';
+import LeafletMap from './components/LeafletMap.vue';
 
 export default {
   name: 'App',
   components: {
-    AMapComponent
+    LeafletMap
   }
 };
 </script>
