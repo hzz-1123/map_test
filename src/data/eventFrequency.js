@@ -40,13 +40,11 @@ export const eventFrequency = {
 
 // 频次对应的颜色
 export const frequencyColors = {
-  level7: "#67000d",  // >400次 深红
-  level6: "#a50f15",  // 31-400次 红
-  level5: "#cb181d",  // 21-300次 橙红
-  level4: "#ef3b2c",  // 11-200次 橙
-  level3: "#fb6a4a",  // 6-100次 浅橙
-  level2: "#fc9272",  // 1-5次 浅粉
-  level1: "#fee0d2"   // 0次 最浅
+  level5: "#8b0000",  // 极高 >350次 深红色
+  level4: "#f64747",  // 高 201-350次 亮红色
+  level3: "#FFCC80",  // 中 51-200次 暖橙黄
+  level2: "#FFE6B3",  // 低 11-50次 浅黄橙
+  level1: "#FFF9E6"   // 极低 0-10次 极浅米黄
 };
 
 // 获取国家事件频次
@@ -56,12 +54,10 @@ export function getEventFrequency(countryCode) {
 
 // 根据频次获取颜色
 export function getFrequencyColor(count) {
-  if (count > 400) return frequencyColors.level7;
-  if (count >= 31 && count <= 400) return frequencyColors.level6;
-  if (count >= 21 && count <= 30) return frequencyColors.level5;
-  if (count >= 11 && count <= 20) return frequencyColors.level4;
-  if (count >= 6 && count <= 10) return frequencyColors.level3;
-  if (count >= 1 && count <= 5) return frequencyColors.level2;
+  if (count > 350) return frequencyColors.level5;
+  if (count >= 201 && count <= 350) return frequencyColors.level4;
+  if (count >= 51 && count <= 200) return frequencyColors.level3;
+  if (count >= 11 && count <= 50) return frequencyColors.level2;
   return frequencyColors.level1;
 }
 

@@ -16,13 +16,11 @@ export default {
   data() {
     return {
       legendItems: [
-        { color: '#67000d', label: '>400次' },
-        { color: '#a50f15', label: '31-400次' },
-        { color: '#cb181d', label: '21-300次' },
-        { color: '#ef3b2c', label: '11-200次' },
-        { color: '#fb6a4a', label: '6-100次' },
-        { color: '#fc9272', label: '1-5次' },
-        { color: '#fee0d2', label: '0次' }
+        { color: '#871a1a', label: '>500次（极高）' },
+        { color: '#FF9933', label: '201-500次（高）' },
+        { color: '#FFCC80', label: '51-200次（中）' },
+        { color: '#FFE6B3', label: '11-50次（低）' },
+        { color: '#FFF9E6', label: '0-10次（极低）' }
       ]
     };
   }

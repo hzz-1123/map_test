@@ -421,8 +421,15 @@ export default {
 
       if (this.focusedCountry?.code !== code) {
         const polygons = this.countryPolygons[code] || [];
+        const style = this.getCountryStyle(code);
         polygons.forEach(p => {
-          p.setOptions({ fillColor: '#66bb6a', fillOpacity: 0.5 });
+          p.setOptions({ 
+            fillColor: style.color,
+            fillOpacity: 0.9,  // 提高透明度突出显示
+            strokeColor: '#333333',  // 深色边框
+            strokeWeight: 2,
+            strokeOpacity: 1
+          });
         });
       }
     },
@@ -434,8 +441,15 @@ export default {
     restoreCountryStyle(code) {
       const polygons = this.countryPolygons[code] || [];
       const style = this.getCountryStyle(code);
+      const isChinaCode = code === 'CHN';
       polygons.forEach(p => {
-        p.setOptions({ fillColor: style.color, fillOpacity: style.opacity });
+        p.setOptions({ 
+          fillColor: style.color, 
+          fillOpacity: style.opacity,
+          strokeColor: isChinaCode ? '#ff0000' : '#ffffff',
+          strokeWeight: isChinaCode ? 2 : 1,
+          strokeOpacity: 0.8
+        });
       });
     },
 
