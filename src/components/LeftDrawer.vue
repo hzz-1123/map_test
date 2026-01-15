@@ -1,24 +1,20 @@
 <template>
-  <div :class="['left-drawer-wrapper', { collapsed: isCollapsed }]">
-    <!-- 抽屉内容 -->
-    <div :class="['drawer-content', { collapsed: isCollapsed }]">
-      <div class="drawer-menu">
-        <div 
-          v-for="item in menuItems" 
-          :key="item.id"
-          :class="['menu-item', { active: activeItem === item.id }]"
-          @click="selectItem(item.id)"
-        >
-          <span class="menu-text">{{ item.name }}</span>
-        </div>
-      </div>
+  <aside :class="['left-drawer', { open: drawerOpen }]">
+    <div class="drawer-collapsed" v-if="!drawerOpen" @click="drawerOpen = true">
+      <span class="collapse-icon">›</span>
     </div>
-    
-    <!-- 伸缩按钮（固定位置） -->
-    <div class="toggle-btn" @click="toggleDrawer">
-      <span class="toggle-arrow">{{ isCollapsed ? '›' : '‹' }}</span>
+    <div class="drawer-content" v-else>
+      <button 
+        v-for="tool in tools" 
+        :key="tool.id"
+        :class="['tool-btn', { active: activeTool === tool.id }]"
+        @click="selectTool(tool.id)"
+      >
+        {{ tool.label }}
+      </button>
+      <button class="tool-btn collapse-btn" @click="drawerOpen = false">‹</button>
     </div>
-  </div>
+  </aside>
 </template>
 
 <script>
@@ -26,34 +22,34 @@ export default {
   name: "LeftDrawer",
   data() {
     return {
-      isCollapsed: false,
-      activeItem: 'country',
-      menuItems: [
-        { id: 'country', name: '国家' },
-        { id: 'person', name: '人物' },
-        { id: 'facility', name: '设施' },
-        { id: 'organization', name: '机构' },
-        { id: 'event', name: '事件' }
+      drawerOpen: false,
+      activeTool: 'country',
+      tools: [
+        { id: 'country', label: '国家' },
+        { id: 'person', label: '人物' },
+        { id: 'facility', label: '设施' },
+        { id: 'org', label: '机构' },
+        { id: 'event', label: '事件' }
       ]
     };
   },
   methods: {
-    toggleDrawer() {
-      this.isCollapsed = !this.isCollapsed;
-      this.$emit('toggle', this.isCollapsed);
-    },
-    selectItem(id) {
-      this.activeItem = id;
+    selectTool(id) {
+      this.activeTool = id;
       this.$emit('select', id);
+    }
+  },
+  watch: {
+    drawerOpen(val) {
+      this.$emit('toggle', !val);
     }
   }
 };
 </script>
 
 <style scoped>
-.left-drawer-wrapper {
+.left-drawer {
   position: absolute;
-  top: 150px;
   left: 0;
   z-index: 999;
   display: flex;
@@ -81,22 +77,20 @@ export default {
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }
 
-.drawer-content.collapsed {
-  width: 0;
-  border-width: 0;
+.left-drawer:not(.open) {
+  width: 32px;
 }
 
-.drawer-menu {
-  width: 80px;
-  display: flex;
-  flex-direction: column;
+.left-drawer.open {
+  width: 70px;
 }
 
-.menu-item {
+.drawer-collapsed {
+  width: 32px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 80px;
   cursor: pointer;
   border-bottom: 1px solid rgba(200, 200, 200, 0.3);
   transition: background 0.2s;
@@ -137,8 +131,16 @@ export default {
   border-left: none;
   border-radius: 0 6px 6px 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  width: 70px;
+}
+
+.tool-btn {
+  width: 70px;
+  padding: 18px 0;
+  background: #3d4a5c;
+  border: none;
+  border-bottom: 1px solid #4a5a6e;
   cursor: pointer;
   transition: background 0.2s;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);

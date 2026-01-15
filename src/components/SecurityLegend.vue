@@ -34,12 +34,12 @@ export default {
 <style scoped>
 .security-legend {
   position: absolute;
-  right: 20px;
-  bottom: 60px;
+  right: 10px;
+  bottom: 250px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 12px 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 996;
   min-width: 140px;
 }
