@@ -59,22 +59,26 @@ export default {
   display: flex;
   align-items: stretch;
   height: 400px;
-  transition: height 0.3s ease;
+  transition: top 0.3s ease, height 0.3s ease;
 }
 
 .left-drawer-wrapper.collapsed {
+  top: 50%;
+  transform: translateY(-50%);
   height: 60px;
 }
 
 /* 抽屉内容 */
 .drawer-content {
   width: 80px;
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid rgba(100, 150, 255, 0.2);
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(200, 200, 200, 0.3);
   border-left: none;
   border-radius: 0;
   overflow: hidden;
   transition: width 0.3s ease;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .drawer-content.collapsed {
@@ -94,7 +98,7 @@ export default {
   justify-content: center;
   height: 80px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(100, 150, 255, 0.15);
+  border-bottom: 1px solid rgba(200, 200, 200, 0.3);
   transition: background 0.2s;
 }
 
@@ -103,16 +107,16 @@ export default {
 }
 
 .menu-item:hover {
-  background: rgba(51, 65, 85, 0.6);
+  background: rgba(59, 130, 246, 0.15);
 }
 
 .menu-item.active {
-  background: rgba(33, 150, 243, 0.3);
+  background: linear-gradient(to right, rgba(59, 130, 246, 0.25), rgba(59, 130, 246, 0.1));
   border-left: 3px solid #3b82f6;
 }
 
 .menu-text {
-  color: #e2e8f0;
+  color: #374151;
   font-size: 18px;
   writing-mode: vertical-rl;
   letter-spacing: 8px;
@@ -120,14 +124,16 @@ export default {
 }
 
 .menu-item.active .menu-text {
-  color: #ffffff;
+  color: #1d4ed8;
+  font-weight: 500;
 }
 
 /* 伸缩按钮 */
 .toggle-btn {
   width: 20px;
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid rgba(100, 150, 255, 0.2);
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.7));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(200, 200, 200, 0.3);
   border-left: none;
   border-radius: 0 6px 6px 0;
   display: flex;
@@ -135,19 +141,20 @@ export default {
   justify-content: center;
   cursor: pointer;
   transition: background 0.2s;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
 }
 
 .toggle-btn:hover {
-  background: rgba(51, 65, 85, 0.95);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .toggle-arrow {
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 18px;
   font-weight: bold;
 }
 
 .toggle-btn:hover .toggle-arrow {
-  color: #e2e8f0;
+  color: #3b82f6;
 }
 </style>

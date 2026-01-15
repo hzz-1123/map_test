@@ -1,16 +1,16 @@
 <template>
   <div id="app">
-    <Mars3dMap />
+    <AMapComponent />
   </div>
 </template>
 
 <script>
-import Mars3dMap from './components/Mars3dMap.vue';
+import AMapComponent from './components/AMapComponent.vue';
 
 export default {
   name: 'App',
   components: {
-    Mars3dMap
+    AMapComponent
   }
 };
 </script>
