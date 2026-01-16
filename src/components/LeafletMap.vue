@@ -732,25 +732,13 @@ const initMiniMap = (countryBounds) => {
 // 关闭小地图
 const closeMiniMap = () => {
   showMiniMap.value = false
-  showCountryDetail.value = false
   currentCountryBounds = null
-  
-  // 恢复聚焦国家的样式
-  if (focusedCountry.value) {
-    restoreCountryStyle(focusedCountry.value.code)
-    focusedCountry.value = null
-  }
-  
-  resetSelectedLayers()
   
   if (miniMap) {
     miniMap.remove()
     miniMap = null
     viewRectangle = null
   }
-  
-  // 回到初始视图
-  map.setView([35, 105], 4)
 }
 
 // 关闭国家详情面板
