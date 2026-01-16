@@ -61,12 +61,11 @@ export default {
   display: flex;
   align-items: stretch;
   height: 560px;
-  transition: top 0.3s ease, height 0.3s ease;
+  transition: transform 0.3s ease, height 0.3s ease, top 0.3s ease;
 }
 
 .right-drawer-wrapper.collapsed {
-  top: 50%;
-  transform: translateY(-50%);
+  top: calc(50% - 30px);
   height: 60px;
 }
 

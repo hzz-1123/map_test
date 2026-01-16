@@ -18,16 +18,48 @@
     <div class="toggle-btn" @click="toggleDrawer">
       <span class="toggle-arrow">{{ isCollapsed ? '›' : '‹' }}</span>
     </div>
+    
+    <!-- 国家列表面板 -->
+    <div v-if="showCountryPanel" class="country-panel">
+      <div class="panel-header">
+        <span class="panel-title">国家</span>
+        <button class="panel-close" @click="closeCountryPanel">×</button>
+      </div>
+      <div class="panel-search">
+        <input 
+          type="text" 
+          v-model="searchQuery" 
+          placeholder="搜索..." 
+          class="search-input"
+        />
+      </div>
+      <div class="country-list">
+        <div 
+          v-for="country in filteredCountries" 
+          :key="country.code"
+          class="country-item"
+          @click="onCountryItemClick(country)"
+        >
+          <span class="country-code">{{ country.code }}</span>
+          <span class="country-name">{{ country.nameCN }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import { getChineseName } from '../data/countryNames.js';
+
 export default {
   name: "LeftDrawer",
   data() {
     return {
       isCollapsed: false,
       activeItem: 'country',
+      showCountryPanel: false,
+      searchQuery: '',
+      countries: [],
       menuItems: [
         { id: 'country', name: '国家' },
         { id: 'person', name: '人物' },
@@ -37,14 +69,80 @@ export default {
       ]
     };
   },
+  computed: {
+    filteredCountries() {
+      if (!this.searchQuery) return this.countries;
+      const query = this.searchQuery.toLowerCase();
+      return this.countries.filter(c => 
+        c.nameCN.includes(query) || 
+        c.nameEN.toLowerCase().includes(query) ||
+        c.code.toLowerCase().includes(query)
+      );
+    }
+  },
+  async mounted() {
+    await this.loadCountries();
+  },
   methods: {
     toggleDrawer() {
       this.isCollapsed = !this.isCollapsed;
+      if (this.isCollapsed) {
+        this.showCountryPanel = false;
+      }
       this.$emit('toggle', this.isCollapsed);
     },
     selectItem(id) {
       this.activeItem = id;
       this.$emit('select', id);
+      
+      if (id === 'country') {
+        this.showCountryPanel = !this.showCountryPanel;
+      } else {
+        this.showCountryPanel = false;
+      }
+    },
+    closeCountryPanel() {
+      this.showCountryPanel = false;
+    },
+    async loadCountries() {
+      try {
+        const response = await fetch('/data/countries.geojson');
+        const geojson = await response.json();
+        
+        const countryMap = new Map();
+        
+        geojson.features.forEach(feature => {
+          const props = feature.properties;
+          const nameEN = props.NAME || props.ADMIN || props.name || '';
+          const code = props.ISO_A3 || props.ADM0_A3 || props['ISO3166-1-Alpha-3'] || '';
+          
+          // 跳过无效数据和重复项
+          if (!nameEN || countryMap.has(code)) return;
+          
+          // 跳过一些特殊区域
+          const skipList = ['Antarctica', 'Bir Tawil', 'Scarborough Reef', 'Serranilla Bank', 'Bajo Nuevo Bank (Petrel Is.)'];
+          if (skipList.includes(nameEN)) return;
+          
+          const nameCN = getChineseName(nameEN);
+          
+          countryMap.set(code, {
+            code: code || '--',
+            nameEN,
+            nameCN,
+            feature
+          });
+        });
+        
+        // 按中文名排序
+        this.countries = Array.from(countryMap.values()).sort((a, b) => 
+          a.nameCN.localeCompare(b.nameCN, 'zh-CN')
+        );
+      } catch (error) {
+        console.error('加载国家数据失败:', error);
+      }
+    },
+    onCountryItemClick(country) {
+      this.$emit('country-click', country);
     }
   }
 };
@@ -59,12 +157,11 @@ export default {
   display: flex;
   align-items: stretch;
   height: 400px;
-  transition: top 0.3s ease, height 0.3s ease;
+  transition: transform 0.3s ease, height 0.3s ease, top 0.3s ease;
 }
 
 .left-drawer-wrapper.collapsed {
-  top: 50%;
-  transform: translateY(-50%);
+  top: calc(50% - 30px);
   height: 60px;
 }
 
@@ -156,5 +253,122 @@ export default {
 
 .toggle-btn:hover .toggle-arrow {
   color: #3b82f6;
+}
+
+/* 国家列表面板 */
+.country-panel {
+  position: absolute;
+  left: 100px;
+  top: 0;
+  width: 280px;
+  height: 500px;
+  background: #2d3a4b;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #2d3a4b;
+  border-bottom: 1px solid #3d4a5c;
+}
+
+.panel-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.panel-close {
+  background: none;
+  border: none;
+  color: #8b9cb5;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.panel-close:hover {
+  color: #fff;
+}
+
+.panel-search {
+  padding: 12px 16px;
+}
+
+.panel-search .search-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: #3d4a5c;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.panel-search .search-input::placeholder {
+  color: #8b9cb5;
+}
+
+.country-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.country-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.country-list::-webkit-scrollbar-track {
+  background: #2d3a4b;
+}
+
+.country-list::-webkit-scrollbar-thumb {
+  background: #4a5568;
+  border-radius: 3px;
+}
+
+.country-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid #3d4a5c;
+  transition: background 0.2s;
+}
+
+.country-item:hover {
+  background: #3d4a5c;
+}
+
+.country-item:last-child {
+  border-bottom: none;
+}
+
+.country-code {
+  width: 40px;
+  color: #8b9cb5;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.country-name {
+  flex: 1;
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.country-checkbox {
+  display: none;
 }
 </style>

@@ -34,7 +34,7 @@
     <!-- 主内容区 -->
     <div class="main-area">
       <!-- 左侧抽屉 -->
-      <LeftDrawer @toggle="onLeftDrawerToggle" @select="onLeftDrawerSelect" />
+      <LeftDrawer @toggle="onLeftDrawerToggle" @select="onLeftDrawerSelect" @country-click="onCountryListClick" />
 
       <!-- 地图区域 -->
       <div class="map-container" ref="mapContainer"></div>
@@ -444,6 +444,27 @@ const onLeftDrawerSelect = (id) => console.log('左侧选择:', id)
 const onRightDrawerToggle = (collapsed) => console.log('右侧抽屉:', collapsed ? '收起' : '展开')
 const onRightDrawerSelect = (id) => console.log('右侧选择:', id)
 
+// 从国家列表点击国家
+const onCountryListClick = (country) => {
+  if (!countriesLayer || !country.feature) return
+  
+  // 找到对应的图层
+  let targetLayer = null
+  countriesLayer.eachLayer((layer) => {
+    const props = layer.feature.properties
+    const code = props.ISO_A3 || props.ADM0_A3 || props['ISO3166-1-Alpha-3'] || ''
+    const name = props.NAME || props.ADMIN || props.name || ''
+    
+    if (code === country.code || name === country.nameEN) {
+      targetLayer = layer
+    }
+  })
+  
+  if (targetLayer) {
+    onCountryClick(country.feature, targetLayer)
+  }
+}
+
 // 清理地图
 onUnmounted(() => {
   if (miniMap) {
@@ -604,7 +625,7 @@ const legendItems = [
 /* 小地图概览 */
 .mini-map-container {
   position: absolute;
-  left: 10px;
+  left: 120px;
   top: 10px;
   width: 350px;
   background: #fff;
