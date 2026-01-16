@@ -117,12 +117,124 @@ def calculate_frequency():
         if count > 0:
             country_stats[country] = country_stats.get(country, 0) + count
 
-        
-
 
     cal_results = [{'country': k, 'count': v} for k, v in country_stats.items()]
     return jsonify(cal_results)
 
+
+# 人物
+@app.route('/api/peoplewithcountry', methods=['GET'])
+def get_people_with_country():
+    person_data = get_data('person', ['person_id', 'person', 'address_id'])
+    addresses = get_data('address', ['address_id', 'country'])
+    address_map = {addr['address_id']: addr['country'] for addr in addresses}
+
+    results = []
+    for person in person_data:
+        addr_ids = person.get('address_id', [])
+        if not isinstance(addr_ids, list):
+            addr_ids = [addr_ids]
+        countries = set()
+        for addr_obj in addr_ids:
+            if isinstance(addr_obj, dict) and 'id' in addr_obj:
+                country = address_map.get(addr_obj['id'])
+                if country:
+                    countries.add(country)
+        results.append({
+            'person_id': person['person_id'],
+            'name': person['person'],
+            'countries': list(countries)
+        })
+    return jsonify(results)
+
+
+# 设施
+@app.route('/api/facilitywithcountry', methods=['GET'])
+def get_facility_with_country():
+    fields = request.args.getlist('fields') or ['facility_id', 'address_id']
+    data = get_data('extract_results', fields)
+    facility_data = get_data('facility', ['facility_id', 'facility'])
+    addresses = get_data('address', ['address_id', 'country'])
+    address_map = {addr['address_id']: addr['country'] for addr in addresses}
+
+    facility_to_countries = {}
+    for record in data:
+        rec_countries = set()
+        addr_ids = record.get('address_id', [])
+        if not isinstance(addr_ids, list):
+            addr_ids = [addr_ids]
+        for addr_obj in addr_ids:
+            if isinstance(addr_obj, dict) and 'id' in addr_obj:
+                country = address_map.get(addr_obj['id'])
+                if country:
+                    rec_countries.add(country)
+        
+        rec_f_list = record.get('facility_id', [])
+        if not isinstance(rec_f_list, list):
+            rec_f_list = [rec_f_list]
+        
+        for f_item in rec_f_list:
+            f_id = f_item.get('id') if isinstance(f_item, dict) else f_item
+            if f_id:
+                if f_id not in facility_to_countries:
+                    facility_to_countries[f_id] = set()
+                facility_to_countries[f_id].update(rec_countries)
+
+    for f in facility_data:
+        f_id = f['facility_id']
+        f['countries'] = list(facility_to_countries.get(f_id, []))
+        
+    return jsonify(facility_data)
+
+
+# 机构
+@app.route('/api/organizationwithcountry', methods=['GET'])
+def get_organisation_with_country():
+    organisation_data = get_data('organisation', ['organisation_id', 'organisation', 'address_id'])
+    addresses = get_data('address', ['address_id', 'country'])
+    address_map = {addr['address_id']: addr['country'] for addr in addresses}
+    results = []
+    for org in organisation_data:
+        addr_ids = org.get('address_id', [])
+        if not isinstance(addr_ids, list):
+            addr_ids = [addr_ids]
+        countries = set()
+        for addr_obj in addr_ids:
+            if isinstance(addr_obj, dict) and 'id' in addr_obj:
+                country = address_map.get(addr_obj['id'])
+                if country:
+                    countries.add(country)
+        results.append({
+            'organisation_id': org['organisation_id'],
+            'name': org['organisation'],
+            'countries': list(countries)
+        })
+    return jsonify(results)
+
+
+# 事件
+@app.route('/api/eventwithcountry', methods=['GET'])
+def get_event_with_country():
+    event_data = get_data('extract_results', ['event_id', 'event_name', 'address_id'])
+    addresses = get_data('address', ['address_id', 'country'])
+    address_map = {addr['address_id']: addr['country'] for addr in addresses}
+    results = []
+    for event in event_data:
+        addr_ids = event.get('address_id', [])
+        if not isinstance(addr_ids, list):
+            addr_ids = [addr_ids]
+        countries = set()
+        for addr_obj in addr_ids:
+            if isinstance(addr_obj, dict) and 'id' in addr_obj:
+                country = address_map.get(addr_obj['id'])
+                if country:
+                    countries.add(country)
+        results.append({
+            'event_id': event['event_id'],
+            'name': event['event_name'],
+            'countries': list(countries)
+        })
+    return jsonify(results)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
