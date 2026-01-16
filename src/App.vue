@@ -5,7 +5,7 @@
 </template>
 
 <script>
-import leafletMap from "./components/leafletMap.vue";
+import leafletMap from "./components/LeafletMap.vue";
 
 export default {
     name: "App",
