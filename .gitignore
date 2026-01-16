@@ -5,3 +5,5 @@ dist/
 *.png
 *.jpg
 *.zip
+package-lock.json
+package.json
