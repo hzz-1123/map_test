@@ -60,13 +60,11 @@
       </div>
 
       <!-- 右侧抽屉 -->
-      <RightDrawer @toggle="onRightDrawerToggle" @select="onRightDrawerSelect" />
-
-      <!-- 国家详情面板 -->
-      <CountryDetailPanel 
-        :visible="showCountryDetail"
-        :country="focusedCountry"
-        @close="closeCountryDetail"
+      <RightDrawer 
+        :focusedCountry="focusedCountry"
+        @toggle="onRightDrawerToggle" 
+        @select="onRightDrawerSelect"
+        @close-detail="closeCountryDetail"
       />
 
       <!-- 事件时间轴 -->
@@ -106,7 +104,6 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import LeftDrawer from './LeftDrawer.vue'
 import RightDrawer from './RightDrawer.vue'
-import CountryDetailPanel from './CountryDetailPanel.vue'
 import EventTimeline from './EventTimeline.vue'
 import SecurityLegend from './SecurityLegend.vue'
 import EventFrequencyLegend from './EventFrequencyLegend.vue'
@@ -200,9 +197,11 @@ onMounted(async () => {
       countriesLayer = L.geoJSON(geojsonData, {
         style: (feature) => getFeatureStyle(feature),
         onEachFeature: (feature, layer) => {
-          const code = feature.properties['ISO3166-1-Alpha-3'] || feature.properties.ISO_A3 || feature.properties.ADM0_A3 || ''
-          const name = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN || ''
-          const chineseName = code === 'CHN' ? '中国' : getChineseName(name)
+          const rawCode = feature.properties['ISO3166-1-Alpha-3'] || feature.properties.ISO_A3 || feature.properties.ADM0_A3 || ''
+          const nameEN = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN || ''
+          // 对于代码为-99的国家，使用名称作为key
+          const code = (rawCode && rawCode !== '-99') ? rawCode : nameEN
+          const nameCN = code === 'CHN' ? '中国' : getChineseName(nameEN)
           
           // 存储图层引用
           if (!countryLayers[code]) {
@@ -210,8 +209,8 @@ onMounted(async () => {
           }
           countryLayers[code].push(layer)
           
-          // 绑定事件
-          layer.on('click', () => onCountryClick(code, chineseName))
+          // 绑定事件（传入英文名用于边界匹配）
+          layer.on('click', () => onCountryClick(code, nameEN, nameCN))
           layer.on('mouseover', () => onCountryHover(code, layer))
           layer.on('mouseout', () => onCountryOut(code))
         }
@@ -278,12 +277,15 @@ const applyCurrentLayer = () => {
 }
 
 // 点击国家
-const onCountryClick = (code, name) => {
+const onCountryClick = (code, nameEN, nameCN) => {
   if (code === 'TWN') {
     code = 'CHN'
-    name = '中国'
+    nameEN = 'China'
+    nameCN = '中国'
   }
-  focusOnCountry(code, name)
+  // 清理悬浮状态
+  lastHoveredCode = null
+  focusOnCountryWithNames(code, nameEN, nameCN)
 }
 
 // 鼠标悬浮国家
@@ -291,12 +293,14 @@ const onCountryHover = (code) => {
   if (code === 'TWN') code = 'CHN'
   if (lastHoveredCode === code) return
   
+  // 恢复上一个悬浮国家的样式
   if (lastHoveredCode) {
     restoreCountryStyle(lastHoveredCode)
   }
   
   lastHoveredCode = code
   
+  // 如果不是当前选中的国家，显示悬浮高亮效果
   if (focusedCountry.value?.code !== code) {
     const layers = countryLayers[code] || []
     const style = getCountryStyle(code)
@@ -319,6 +323,20 @@ const onCountryOut = (code) => {
 
 // 恢复国家样式
 const restoreCountryStyle = (code) => {
+  // 如果是当前选中的国家，保持蓝色高亮
+  if (focusedCountry.value?.code === code) {
+    const layers = countryLayers[code] || []
+    layers.forEach(layer => {
+      layer.setStyle({
+        fillColor: '#2196F3',
+        fillOpacity: 0.4,
+        color: '#1565C0',
+        weight: 3
+      })
+    })
+    return
+  }
+  
   const layers = countryLayers[code] || []
   const style = getCountryStyle(code)
   const isChina = code === 'CHN'
@@ -333,15 +351,29 @@ const restoreCountryStyle = (code) => {
   })
 }
 
-// 聚焦到国家
-const focusOnCountry = (code, name) => {
-  if (focusedCountry.value) {
-    restoreCountryStyle(focusedCountry.value.code)
+// 聚焦到国家（支持英文名用于边界匹配，中文名用于显示）
+const focusOnCountryWithNames = (code, nameEN, nameCN) => {
+  // 先保存之前选中的国家代码
+  const prevCode = focusedCountry.value?.code
+  
+  // 清空当前选中状态，这样 restoreCountryStyle 才能正确恢复样式
+  focusedCountry.value = null
+  
+  // 恢复之前选中国家的样式
+  if (prevCode) {
+    restoreCountryStyle(prevCode)
   }
   
-  focusedCountry.value = { code, name }
+  // 尝试用 code 或 nameEN 查找图层
+  let layers = countryLayers[code] || []
+  if (layers.length === 0 && nameEN) {
+    layers = countryLayers[nameEN] || []
+  }
   
-  const layers = countryLayers[code] || []
+  // 更新 focusedCountry，使用实际找到图层的 key
+  const actualCode = countryLayers[code] ? code : (countryLayers[nameEN] ? nameEN : code)
+  focusedCountry.value = { code: actualCode, name: nameCN }
+  
   layers.forEach(layer => {
     layer.setStyle({
       fillColor: '#2196F3',
@@ -353,12 +385,60 @@ const focusOnCountry = (code, name) => {
   
   // 飞到该国家
   if (layers.length > 0) {
-    const bounds = L.featureGroup(layers).getBounds()
+    let bounds
+    
+    // 特殊处理有远离本土领地的国家
+    const specialBoundsMap = {
+      'RUS': L.latLngBounds(L.latLng(41, 20), L.latLng(77, 140)),
+      'Russia': L.latLngBounds(L.latLng(41, 20), L.latLng(77, 140)),
+      'USA': L.latLngBounds(L.latLng(24, -125), L.latLng(50, -66)),
+      'United States of America': L.latLngBounds(L.latLng(24, -125), L.latLng(50, -66)),
+      'NOR': L.latLngBounds(L.latLng(57, 4), L.latLng(71, 31)),
+      'Norway': L.latLngBounds(L.latLng(57, 4), L.latLng(71, 31)),
+      'FRA': L.latLngBounds(L.latLng(41, -5), L.latLng(51, 10)),
+      'France': L.latLngBounds(L.latLng(41, -5), L.latLng(51, 10)),
+      'NLD': L.latLngBounds(L.latLng(50.5, 3), L.latLng(53.5, 7.5)),
+      'Netherlands': L.latLngBounds(L.latLng(50.5, 3), L.latLng(53.5, 7.5)),
+      'DNK': L.latLngBounds(L.latLng(54.5, 8), L.latLng(57.8, 15)),
+      'Denmark': L.latLngBounds(L.latLng(54.5, 8), L.latLng(57.8, 15)),
+      'GBR': L.latLngBounds(L.latLng(49, -8), L.latLng(61, 2)),
+      'United Kingdom': L.latLngBounds(L.latLng(49, -8), L.latLng(61, 2)),
+      'ESP': L.latLngBounds(L.latLng(36, -9.5), L.latLng(43.8, 4.5)),
+      'Spain': L.latLngBounds(L.latLng(36, -9.5), L.latLng(43.8, 4.5)),
+      'PRT': L.latLngBounds(L.latLng(36.9, -9.5), L.latLng(42.2, -6)),
+      'Portugal': L.latLngBounds(L.latLng(36.9, -9.5), L.latLng(42.2, -6)),
+      'AUS': L.latLngBounds(L.latLng(-44, 112), L.latLng(-10, 154)),
+      'Australia': L.latLngBounds(L.latLng(-44, 112), L.latLng(-10, 154)),
+      'NZL': L.latLngBounds(L.latLng(-47, 166), L.latLng(-34, 179)),
+      'New Zealand': L.latLngBounds(L.latLng(-47, 166), L.latLng(-34, 179)),
+      'CHL': L.latLngBounds(L.latLng(-56, -76), L.latLng(-17, -66)),
+      'Chile': L.latLngBounds(L.latLng(-56, -76), L.latLng(-17, -66)),
+      'ECU': L.latLngBounds(L.latLng(-5, -81), L.latLng(1.5, -75)),
+      'Ecuador': L.latLngBounds(L.latLng(-5, -81), L.latLng(1.5, -75)),
+      'IDN': L.latLngBounds(L.latLng(-11, 95), L.latLng(6, 141)),
+      'Indonesia': L.latLngBounds(L.latLng(-11, 95), L.latLng(6, 141)),
+      'MYS': L.latLngBounds(L.latLng(0.8, 99), L.latLng(7.5, 119)),
+      'Malaysia': L.latLngBounds(L.latLng(0.8, 99), L.latLng(7.5, 119)),
+      'JPN': L.latLngBounds(L.latLng(30, 129), L.latLng(46, 146)),
+      'Japan': L.latLngBounds(L.latLng(30, 129), L.latLng(46, 146)),
+      'KIR': L.latLngBounds(L.latLng(-5, 169), L.latLng(5, 177)),
+      'Kiribati': L.latLngBounds(L.latLng(-5, 169), L.latLng(5, 177)),
+      'FJI': L.latLngBounds(L.latLng(-21, 177), L.latLng(-12, -179.5)),
+      'Fiji': L.latLngBounds(L.latLng(-21, 177), L.latLng(-12, -179.5))
+    }
+    
+    if (specialBoundsMap[code]) {
+      bounds = specialBoundsMap[code]
+    } else if (specialBoundsMap[nameEN]) {
+      bounds = specialBoundsMap[nameEN]
+    } else {
+      bounds = L.featureGroup(layers).getBounds()
+    }
+    
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 6 })
     currentCountryBounds = bounds
   }
   
-  // 如果是中国，添加钓鱼岛标记
   if (code === 'CHN') {
     addDiaoyuMarker()
   }
@@ -369,6 +449,12 @@ const focusOnCountry = (code, name) => {
   setTimeout(() => {
     initMiniMap(currentCountryBounds)
   }, 100)
+}
+
+// 聚焦到国家（保留用于兼容）
+const focusOnCountry = (code, name) => {
+  // 调用新函数，name 作为英文名和中文名
+  focusOnCountryWithNames(code, name, name)
 }
 
 // 添加钓鱼岛标记
@@ -670,6 +756,21 @@ const closeMiniMap = () => {
 // 关闭国家详情面板
 const closeCountryDetail = () => {
   showCountryDetail.value = false
+  showMiniMap.value = false
+  
+  // 先保存代码，再清除选中状态，最后恢复样式
+  const prevCode = focusedCountry.value?.code
+  focusedCountry.value = null
+  
+  if (prevCode) {
+    restoreCountryStyle(prevCode)
+  }
+  
+  // 清理小地图
+  if (miniMap) {
+    miniMap.remove()
+    miniMap = null
+  }
 }
 
 // 拖动小地图窗口
@@ -721,23 +822,10 @@ const onTimelineFilter = (f) => console.log('时间轴筛选:', f)
 
 // 从国家列表点击国家
 const onCountryListClick = (country) => {
-  if (!countriesLayer || !country.feature) return
+  if (!countriesLayer) return
   
-  // 找到对应的图层
-  let targetLayer = null
-  countriesLayer.eachLayer((layer) => {
-    const props = layer.feature.properties
-    const code = props.ISO_A3 || props.ADM0_A3 || props['ISO3166-1-Alpha-3'] || ''
-    const name = props.NAME || props.ADMIN || props.name || ''
-    
-    if (code === country.code || name === country.nameEN) {
-      targetLayer = layer
-    }
-  })
-  
-  if (targetLayer) {
-    onCountryClick(country.feature, targetLayer)
-  }
+  // 传入国家代码、英文名（用于边界匹配）和中文名（用于显示）
+  focusOnCountryWithNames(country.code, country.nameEN, country.nameCN)
 }
 
 // 清理地图
@@ -889,7 +977,7 @@ onUnmounted(() => {
 /* 小地图概览 */
 .mini-map-container {
   position: absolute;
-  left: 120px;
+  left: 400px;
   top: 10px;
   width: 350px;
   background: #fff;

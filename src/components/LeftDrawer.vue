@@ -14,7 +14,7 @@
       </div>
     </div>
     
-    <!-- 伸缩按钮（固定位置） -->
+    <!-- 伸缩按钮 -->
     <div class="toggle-btn" @click="toggleDrawer">
       <span class="toggle-arrow">{{ isCollapsed ? '›' : '‹' }}</span>
     </div>
@@ -40,7 +40,7 @@
           class="country-item"
           @click="onCountryItemClick(country)"
         >
-          <span class="country-code">{{ country.code }}</span>
+          <span class="country-code">{{ country.code.length > 3 ? '--' : country.code }}</span>
           <span class="country-name">{{ country.nameCN }}</span>
         </div>
       </div>
@@ -111,29 +111,48 @@ export default {
         
         const countryMap = new Map();
         
+        const excludeList = [
+          'Antarctica', 'Bir Tawil', 'Scarborough Reef', 'Serranilla Bank', 'Bajo Nuevo Bank (Petrel Is.)', 
+          'Southern Patagonian Ice Field', 'Siachen Glacier', 'Cyprus No Mans Area', 'Indian Ocean Territories',
+          'British Indian Ocean Territory', 'British Virgin Islands', 'Cayman Islands', 'Falkland Islands',
+          'Gibraltar', 'Montserrat', 'Pitcairn Islands', 'Saint Helena', 'Turks and Caicos Islands',
+          'Anguilla', 'Bermuda', 'South Georgia and the Islands', 'Akrotiri Sovereign Base Area', 'Dhekelia Sovereign Base Area',
+          'American Samoa', 'Guam', 'Northern Mariana Islands', 'Puerto Rico', 'United States Virgin Islands',
+          'United States Minor Outlying Islands', 'US Naval Base Guantanamo Bay',
+          'French Polynesia', 'French Southern and Antarctic Lands', 'New Caledonia', 'Saint Barthelemy',
+          'Saint Martin', 'Saint Pierre and Miquelon', 'Wallis and Futuna', 'Clipperton Island',
+          'Aruba', 'Curaçao', 'Sint Maarten',
+          'Faroe Islands', 'Greenland',
+          'Norfolk Island', 'Heard Island and McDonald Islands', 'Ashmore and Cartier Islands',
+          'Coral Sea Islands', 'Christmas Island', 'Cocos Islands',
+          'Cook Islands', 'Niue', 'Tokelau',
+          'Hong Kong S.A.R.', 'Macao S.A.R', 'Taiwan',
+          'Aland', 'Jersey', 'Guernsey', 'Isle of Man', 'Svalbard', 'Jan Mayen',
+          'Western Sahara', 'Somaliland', 'Northern Cyprus', 'Kosovo',
+          'Spratly Islands', 'Paracel Islands', 'Brazilian Island', 'Baykonur Cosmodrome'
+        ];
+        
         geojson.features.forEach(feature => {
           const props = feature.properties;
           const nameEN = props.NAME || props.ADMIN || props.name || '';
           const code = props.ISO_A3 || props.ADM0_A3 || props['ISO3166-1-Alpha-3'] || '';
           
-          // 跳过无效数据和重复项
-          if (!nameEN || countryMap.has(code)) return;
+          if (!nameEN) return;
+          if (excludeList.includes(nameEN)) return;
           
-          // 跳过一些特殊区域
-          const skipList = ['Antarctica', 'Bir Tawil', 'Scarborough Reef', 'Serranilla Bank', 'Bajo Nuevo Bank (Petrel Is.)'];
-          if (skipList.includes(nameEN)) return;
+          const key = (code && code !== '-99') ? code : nameEN;
+          if (countryMap.has(key)) return;
           
           const nameCN = getChineseName(nameEN);
           
-          countryMap.set(code, {
-            code: code || '--',
+          countryMap.set(key, {
+            code: key,
             nameEN,
             nameCN,
             feature
           });
         });
         
-        // 按中文名排序
         this.countries = Array.from(countryMap.values()).sort((a, b) => 
           a.nameCN.localeCompare(b.nameCN, 'zh-CN')
         );
@@ -165,14 +184,12 @@ export default {
   height: 60px;
 }
 
-/* 抽屉内容 */
 .drawer-content {
   width: 80px;
   background: linear-gradient(to right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
   backdrop-filter: blur(10px);
   border: 1px solid rgba(200, 200, 200, 0.3);
   border-left: none;
-  border-radius: 0;
   overflow: hidden;
   transition: width 0.3s ease;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
@@ -225,7 +242,6 @@ export default {
   font-weight: 500;
 }
 
-/* 伸缩按钮 */
 .toggle-btn {
   width: 20px;
   background: linear-gradient(to right, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.7));
@@ -255,16 +271,16 @@ export default {
   color: #3b82f6;
 }
 
-/* 国家列表面板 */
 .country-panel {
   position: absolute;
   left: 100px;
   top: 0;
   width: 280px;
   height: 500px;
-  background: #2d3a4b;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
   border-radius: 4px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -275,28 +291,32 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #2d3a4b;
-  border-bottom: 1px solid #3d4a5c;
+  background: rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid rgba(200, 200, 200, 0.3);
+  flex-shrink: 0;
 }
 
 .panel-title {
-  color: #fff;
+  color: #1f2937;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .panel-close {
   background: none;
   border: none;
-  color: #8b9cb5;
+  color: #6b7280;
   font-size: 20px;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 8px;
   line-height: 1;
+  border-radius: 4px;
+  transition: all 0.2s;
 }
 
 .panel-close:hover {
-  color: #fff;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .panel-search {
@@ -306,17 +326,21 @@ export default {
 .panel-search .search-input {
   width: 100%;
   padding: 8px 12px;
-  background: #3d4a5c;
-  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(200, 200, 200, 0.3);
   border-radius: 4px;
-  color: #fff;
+  color: #1f2937;
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
 }
 
 .panel-search .search-input::placeholder {
-  color: #8b9cb5;
+  color: #9ca3af;
+}
+
+.panel-search .search-input:focus {
+  border-color: #3b82f6;
 }
 
 .country-list {
@@ -330,11 +354,11 @@ export default {
 }
 
 .country-list::-webkit-scrollbar-track {
-  background: #2d3a4b;
+  background: rgba(200, 200, 200, 0.2);
 }
 
 .country-list::-webkit-scrollbar-thumb {
-  background: #4a5568;
+  background: rgba(59, 130, 246, 0.3);
   border-radius: 3px;
 }
 
@@ -343,12 +367,12 @@ export default {
   align-items: center;
   padding: 12px 8px;
   cursor: pointer;
-  border-bottom: 1px solid #3d4a5c;
+  border-bottom: 1px solid rgba(200, 200, 200, 0.3);
   transition: background 0.2s;
 }
 
 .country-item:hover {
-  background: #3d4a5c;
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .country-item:last-child {
@@ -357,18 +381,14 @@ export default {
 
 .country-code {
   width: 40px;
-  color: #8b9cb5;
+  color: #6b7280;
   font-size: 13px;
   flex-shrink: 0;
 }
 
 .country-name {
   flex: 1;
-  color: #e2e8f0;
+  color: #1f2937;
   font-size: 14px;
-}
-
-.country-checkbox {
-  display: none;
 }
 </style>
