@@ -92,6 +92,8 @@
 </template>
 
 <script>
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { getChineseName } from "@/data/countryNames";
 import { getCountrySecurityColor, getSecurityLevel } from "@/data/securityLevels";
 import { getCountryFrequencyColor } from "@/data/eventFrequency";
@@ -117,8 +119,8 @@ export default {
       map: null,
       overviewMap: null,
       geojsonData: null,
-      countryPolygons: {},  // code -> [polygons]
-      labelMarkers: [],
+      countryLayers: {},  // code -> layer
+      geoJsonLayer: null,
       lastHoveredCode: null,
       showOverview: false,
       showCountryDetail: false,
@@ -132,120 +134,57 @@ export default {
     };
   },
   mounted() {
-    this.loadAMapScript();
+    this.initMap();
     document.addEventListener('mousemove', this.onDragOverview);
     document.addEventListener('mouseup', this.stopDragOverview);
   },
   methods: {
-    loadAMapScript() {
-      window._AMapSecurityConfig = {
-        securityJsCode: ''
-      };
-      
-      if (window.AMap) {
-        this.initMap();
-        return;
-      }
-      
-      const script = document.createElement('script');
-      script.src = 'https://webapi.amap.com/maps?v=2.0&key=8c3c47a47331944914ddaf253158536b';
-      script.onload = () => this.waitForAMap();
-      script.onerror = () => console.error('高德地图加载失败');
-      document.head.appendChild(script);
-    },
-
-    waitForAMap() {
-      if (window.AMap) {
-        this.initMap();
-      } else {
-        setTimeout(() => this.waitForAMap(), 30);
-      }
-    },
-
     initMap() {
-      this.map = new AMap.Map('mapContainer', {
-        zoom: 4,  // 提高初始缩放级别
-        center: [105, 35],  // 以中国为中心
-        mapStyle: 'amap://styles/normal',
-        viewMode: '2D',
-        zooms: [3.5, 18],  // 提高最小缩放级别，防止地图重复
-        dragEnable: true,
-        zoomEnable: true,
-        doubleClickZoom: true,
-        scrollWheel: true,
-        limitBounds: new AMap.Bounds([-180, -85], [180, 85]),
-        showIndoorMap: false,
-        resizeEnable: true
+      // 创建地图，以中国为中心
+      this.map = L.map('mapContainer', {
+        center: [30, 105],
+        zoom: 4,
+        minZoom: 4,
+        maxZoom: 7,
+        zoomControl: true,
+        attributionControl: false,
+        maxBounds: [[-90, -180], [90, 180]],
+        maxBoundsViscosity: 1.0,
+        worldCopyJump: false
       });
 
-      // 监听缩放和拖动，强制限制边界
-      this.map.on('mapmove', () => this.constrainMapBounds());
-      this.map.on('zoomchange', () => this.constrainMapBounds());
+      // 设置背景色与海洋颜色一致
+      document.getElementById('mapContainer').style.backgroundColor = '#b5d6f1';
 
-      this.map.on('complete', () => {
-        console.log('高德地图加载完成');
-        this.loadCountryLayer();
-        this.bindMapEvents();
-      });
-    },
+      // 添加离线天地图矢量底图
+      L.tileLayer('/tiles/vec_w/{z}/{y}/{x}.png', {
+        maxZoom: 7,
+        minZoom: 4,
+        noWrap: true
+      }).addTo(this.map);
 
-    bindMapEvents() {
+      // 添加离线天地图注记图层
+      L.tileLayer('/tiles/cva_w/{z}/{y}/{x}.png', {
+        maxZoom: 7,
+        minZoom: 4,
+        noWrap: true
+      }).addTo(this.map);
+
+      // 绑定事件
       this.map.on('mousemove', (e) => {
         this.mouseCoord = {
-          lng: e.lnglat.getLng().toFixed(4) + '°',
-          lat: e.lnglat.getLat().toFixed(4) + '°',
-          zoom: this.map.getZoom().toFixed(1)
+          lng: e.latlng.lng.toFixed(4) + '°',
+          lat: e.latlng.lat.toFixed(4) + '°',
+          zoom: this.map.getZoom()
         };
       });
 
       this.map.on('moveend', () => {
         this.updateOverviewRect();
       });
-    },
 
-    constrainMapBounds() {
-      const bounds = this.map.getBounds();
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
-      const center = this.map.getCenter();
-      
-      let newLng = center.getLng();
-      let newLat = center.getLat();
-      let needUpdate = false;
-      
-      // 计算当前视野宽度
-      const viewWidth = ne.getLng() - sw.getLng();
-      
-      // 如果视野宽度超过360度，说明会出现重复，需要放大地图
-      if (viewWidth >= 360) {
-        this.map.setZoom(this.map.getZoom() + 0.5);
-        return;
-      }
-      
-      // 限制经度范围，防止看到重复的地图
-      const maxLng = 180 - viewWidth / 2;
-      const minLng = -180 + viewWidth / 2;
-      
-      if (newLng > maxLng) {
-        newLng = maxLng;
-        needUpdate = true;
-      } else if (newLng < minLng) {
-        newLng = minLng;
-        needUpdate = true;
-      }
-      
-      // 限制纬度范围
-      if (sw.getLat() < -85) {
-        newLat = center.getLat() + (-85 - sw.getLat());
-        needUpdate = true;
-      } else if (ne.getLat() > 85) {
-        newLat = center.getLat() - (ne.getLat() - 85);
-        needUpdate = true;
-      }
-      
-      if (needUpdate) {
-        this.map.setCenter([newLng, newLat]);
-      }
+      // 加载国家边界
+      this.loadCountryLayer();
     },
 
     loadCountryLayer() {
@@ -257,200 +196,54 @@ export default {
             return code && code !== "-99";
           });
 
+          // 处理台湾属于中国
+          features.forEach(f => {
+            if (f.properties["ISO3166-1-Alpha-3"] === 'TWN') {
+              f.properties["ISO3166-1-Alpha-3"] = 'CHN';
+            }
+          });
+
           this.geojsonData = { ...data, features };
           this.renderCountries();
-          this.applyCurrentLayer();
           console.log('国家边界加载完成');
         })
         .catch(err => console.error('加载GeoJSON失败:', err));
     },
 
     renderCountries() {
-      this.geojsonData.features.forEach(feature => {
-        let code = feature.properties["ISO3166-1-Alpha-3"];
-        const name = feature.properties.name;
-        
-        // 台湾属于中国，统一使用CHN代码
-        if (code === 'TWN') {
-          code = 'CHN';
-        }
-        
-        const chineseName = code === 'CHN' ? '中国' : getChineseName(name);
-        
-        const paths = this.convertToAMapPaths(feature.geometry);
-        if (!paths.length) return;
+      this.geoJsonLayer = L.geoJSON(this.geojsonData, {
+        style: (feature) => this.getFeatureStyle(feature),
+        onEachFeature: (feature, layer) => {
+          const code = feature.properties["ISO3166-1-Alpha-3"];
+          const name = feature.properties.name;
+          const chineseName = code === 'CHN' ? '中国' : getChineseName(name);
 
-        // 过滤跨越日期变更线的路径
-        const validPaths = paths.filter(path => !this.isCrossingDateline(path));
-        if (!validPaths.length) return;
-
-        // 初始化或追加到已有的多边形数组
-        if (!this.countryPolygons[code]) {
-          this.countryPolygons[code] = [];
-        }
-
-        validPaths.forEach(path => {
-          const polygon = new AMap.Polygon({
-            path: path,
-            fillColor: '#ffffff',
-            fillOpacity: 0.1,
-            strokeColor: code === 'CHN' ? '#ff0000' : '#ffffff',  // 中国边界用红色
-            strokeWeight: code === 'CHN' ? 2 : 1,
-            strokeOpacity: 0.8
-          });
-
-          polygon.setExtData({ code, name, chineseName });
-          polygon.on('click', () => this.onCountryClick(code, chineseName));
-          polygon.on('mouseover', () => this.onCountryHover(code));
-          polygon.on('mouseout', () => this.onCountryOut(code));
-
-          this.map.add(polygon);
-          this.countryPolygons[code].push(polygon);
-        });
-
-        // 添加标签（台湾不单独添加标签，中国只添加一次）
-        if (feature.properties["ISO3166-1-Alpha-3"] !== 'TWN' && validPaths.length > 0) {
-          // 中国标签只在主体大陆添加
-          if (code === 'CHN' && feature.properties["ISO3166-1-Alpha-3"] === 'CHN') {
-            this.addCountryLabel(code, chineseName, validPaths);
-          } else if (code !== 'CHN') {
-            this.addCountryLabel(code, chineseName, validPaths);
+          // 存储图层引用
+          if (!this.countryLayers[code]) {
+            this.countryLayers[code] = [];
           }
+          this.countryLayers[code].push(layer);
+
+          // 绑定事件
+          layer.on('click', () => this.onCountryClick(code, chineseName));
+          layer.on('mouseover', () => this.onCountryHover(code, layer));
+          layer.on('mouseout', () => this.onCountryOut(code));
         }
-      });
+      }).addTo(this.map);
     },
 
-    convertToAMapPaths(geometry) {
-      const paths = [];
-      
-      if (geometry.type === 'Polygon') {
-        paths.push(geometry.coordinates[0].map(c => [c[0], c[1]]));
-      } else if (geometry.type === 'MultiPolygon') {
-        geometry.coordinates.forEach(polygon => {
-          paths.push(polygon[0].map(c => [c[0], c[1]]));
-        });
-      }
-      
-      return paths;
-    },
-
-    isCrossingDateline(path) {
-      let hasEast = false, hasWest = false;
-      for (const coord of path) {
-        if (coord[0] > 170) hasEast = true;
-        if (coord[0] < -170) hasWest = true;
-        if (hasEast && hasWest) return true;
-      }
-      return false;
-    },
-
-    addCountryLabel(code, name, paths) {
-      // 找最大的多边形
-      let maxArea = 0, mainPath = paths[0];
-      paths.forEach(path => {
-        const area = this.calculateArea(path);
-        if (area > maxArea) {
-          maxArea = area;
-          mainPath = path;
-        }
-      });
-
-      const center = this.calculateCenter(mainPath);
-      if (!center) return;
-
-      const marker = new AMap.Text({
-        text: name,
-        position: center,
-        style: {
-          'background-color': 'transparent',
-          'border': 'none',
-          'color': '#ffffff',
-          'font-size': this.getFontSize(maxArea) + 'px',
-          'text-shadow': '1px 1px 2px #000, -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000'
-        }
-      });
-
-      this.map.add(marker);
-      this.labelMarkers.push(marker);
-    },
-
-    calculateArea(path) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      path.forEach(c => {
-        minX = Math.min(minX, c[0]);
-        maxX = Math.max(maxX, c[0]);
-        minY = Math.min(minY, c[1]);
-        maxY = Math.max(maxY, c[1]);
-      });
-      return (maxX - minX) * (maxY - minY);
-    },
-
-    calculateCenter(path) {
-      let sumX = 0, sumY = 0;
-      path.forEach(c => { sumX += c[0]; sumY += c[1]; });
-      return [sumX / path.length, sumY / path.length];
-    },
-
-    getFontSize(area) {
-      if (area > 2000) return 16;
-      if (area > 500) return 14;
-      if (area > 100) return 12;
-      return 10;
-    },
-
-    onCountryClick(code, name) {
-      // 台湾属于中国
-      if (code === 'TWN') {
-        code = 'CHN';
-        name = '中国';
-      }
-      this.focusOnCountry(code, name);
-    },
-
-    onCountryHover(code) {
-      // 台湾属于中国
-      if (code === 'TWN') code = 'CHN';
-      if (this.lastHoveredCode === code) return;
-
-      // 恢复上一个
-      if (this.lastHoveredCode) {
-        this.restoreCountryStyle(this.lastHoveredCode);
-      }
-
-      this.lastHoveredCode = code;
-
-      if (this.focusedCountry?.code !== code) {
-        const polygons = this.countryPolygons[code] || [];
-        const style = this.getCountryStyle(code);
-        polygons.forEach(p => {
-          p.setOptions({ 
-            fillColor: style.color,
-            fillOpacity: 0.9,  // 提高透明度突出显示
-            strokeColor: '#333333',  // 深色边框
-            strokeWeight: 2,
-            strokeOpacity: 1
-          });
-        });
-      }
-    },
-
-    onCountryOut(code) {
-      // 由 onCountryHover 处理恢复
-    },
-
-    restoreCountryStyle(code) {
-      const polygons = this.countryPolygons[code] || [];
+    getFeatureStyle(feature) {
+      const code = feature.properties["ISO3166-1-Alpha-3"];
       const style = this.getCountryStyle(code);
-      const isChinaCode = code === 'CHN';
-      polygons.forEach(p => {
-        p.setOptions({ 
-          fillColor: style.color, 
-          fillOpacity: style.opacity,
-          strokeColor: isChinaCode ? '#ff0000' : '#ffffff',
-          strokeWeight: isChinaCode ? 2 : 1,
-          strokeOpacity: 0.8
-        });
-      });
+      const isChina = code === 'CHN';
+      
+      return {
+        fillColor: style.color,
+        fillOpacity: style.opacity,
+        color: isChina ? '#ff0000' : '#ffffff',
+        weight: isChina ? 2 : 1,
+        opacity: 0.8
+      };
     },
 
     getCountryStyle(code) {
@@ -464,28 +257,79 @@ export default {
       }
     },
 
+    onCountryClick(code, name) {
+      if (code === 'TWN') {
+        code = 'CHN';
+        name = '中国';
+      }
+      this.focusOnCountry(code, name);
+    },
+
+    onCountryHover(code) {
+      if (code === 'TWN') code = 'CHN';
+      if (this.lastHoveredCode === code) return;
+
+      if (this.lastHoveredCode) {
+        this.restoreCountryStyle(this.lastHoveredCode);
+      }
+
+      this.lastHoveredCode = code;
+
+      if (this.focusedCountry?.code !== code) {
+        const layers = this.countryLayers[code] || [];
+        const style = this.getCountryStyle(code);
+        layers.forEach(layer => {
+          layer.setStyle({
+            fillColor: style.color,
+            fillOpacity: 0.9,
+            color: '#333333',
+            weight: 2,
+            opacity: 1
+          });
+        });
+      }
+    },
+
+    onCountryOut(code) {
+      // 由 onCountryHover 处理恢复
+    },
+
+    restoreCountryStyle(code) {
+      const layers = this.countryLayers[code] || [];
+      const style = this.getCountryStyle(code);
+      const isChina = code === 'CHN';
+      layers.forEach(layer => {
+        layer.setStyle({
+          fillColor: style.color,
+          fillOpacity: style.opacity,
+          color: isChina ? '#ff0000' : '#ffffff',
+          weight: isChina ? 2 : 1,
+          opacity: 0.8
+        });
+      });
+    },
+
     focusOnCountry(code, name) {
-      // 恢复之前聚焦的国家
       if (this.focusedCountry) {
         this.restoreCountryStyle(this.focusedCountry.code);
       }
 
       this.focusedCountry = { code, name };
 
-      // 高亮当前国家
-      const polygons = this.countryPolygons[code] || [];
-      polygons.forEach(p => {
-        p.setOptions({
+      const layers = this.countryLayers[code] || [];
+      layers.forEach(layer => {
+        layer.setStyle({
           fillColor: '#2196F3',
           fillOpacity: 0.4,
-          strokeColor: '#1565C0',
-          strokeWeight: 3
+          color: '#1565C0',
+          weight: 3
         });
       });
 
       // 飞到该国家
-      if (polygons.length > 0) {
-        this.map.setFitView(polygons, false, [50, 50, 50, 50]);
+      if (layers.length > 0) {
+        const bounds = L.featureGroup(layers).getBounds();
+        this.map.fitBounds(bounds, { padding: [50, 50] });
       }
 
       this.showOverview = true;
@@ -499,17 +343,18 @@ export default {
     },
 
     applyCurrentLayer() {
-      Object.keys(this.countryPolygons).forEach(code => {
+      Object.keys(this.countryLayers).forEach(code => {
         if (this.focusedCountry?.code === code) return;
         
         const style = this.getCountryStyle(code);
-        const polygons = this.countryPolygons[code] || [];
-        polygons.forEach(p => {
-          p.setOptions({
+        const isChina = code === 'CHN';
+        const layers = this.countryLayers[code] || [];
+        layers.forEach(layer => {
+          layer.setStyle({
             fillColor: style.color,
             fillOpacity: style.opacity,
-            strokeColor: '#ffffff',
-            strokeWeight: 1
+            color: isChina ? '#ff0000' : '#ffffff',
+            weight: isChina ? 2 : 1
           });
         });
       });
@@ -521,49 +366,41 @@ export default {
         return;
       }
 
-      this.overviewMap = new AMap.Map('overviewMap', {
-        zoom: 0,  // 最小缩放，显示全球
-        center: [0, 0],  // 初始中心
-        mapStyle: 'amap://styles/normal',
-        dragEnable: false,
-        zoomEnable: false,
-        doubleClickZoom: false,
-        scrollWheel: false
+      this.overviewMap = L.map('overviewMap', {
+        center: [0, 0],
+        zoom: 1,
+        minZoom: 1,
+        maxZoom: 3,
+        dragging: false,
+        zoomControl: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false
       });
 
-      this.overviewMap.on('complete', () => {
-        this.updateOverviewRect();
-      });
+      L.tileLayer('/tiles/vec_w/{z}/{y}/{x}.png', {
+        maxZoom: 7,
+        minZoom: 1
+      }).addTo(this.overviewMap);
+
+      this.updateOverviewRect();
     },
 
     updateOverviewRect() {
       if (!this.overviewMap) return;
 
-      // 移除旧的矩形
       if (this.viewRectangle) {
-        this.overviewMap.remove(this.viewRectangle);
+        this.overviewMap.removeLayer(this.viewRectangle);
       }
 
-      // 获取主地图当前视野范围
       const bounds = this.map.getBounds();
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
-
-      // 创建红色矩形框表示当前视野
-      this.viewRectangle = new AMap.Rectangle({
-        bounds: new AMap.Bounds(sw, ne),
+      this.viewRectangle = L.rectangle(bounds, {
+        color: '#ff0000',
+        weight: 2,
         fillColor: '#ff0000',
-        fillOpacity: 0.2,
-        strokeColor: '#ff0000',
-        strokeWeight: 2,
-        strokeStyle: 'solid'
-      });
-      this.overviewMap.add(this.viewRectangle);
+        fillOpacity: 0.2
+      }).addTo(this.overviewMap);
 
-      // 将概览图中心设置为当前视野的中心
-      const centerLng = (sw.getLng() + ne.getLng()) / 2;
-      const centerLat = (sw.getLat() + ne.getLat()) / 2;
-      this.overviewMap.setCenter([centerLng, centerLat]);
+      this.overviewMap.setView(bounds.getCenter(), 1);
     },
 
     closeOverview() {
@@ -574,7 +411,7 @@ export default {
         this.restoreCountryStyle(this.focusedCountry.code);
       }
       this.focusedCountry = null;
-      this.map.setZoomAndCenter(3, [105, 35]);
+      this.map.setView([35, 105], 4);
     },
 
     closeCountryDetail() {
@@ -611,8 +448,8 @@ export default {
   beforeUnmount() {
     document.removeEventListener('mousemove', this.onDragOverview);
     document.removeEventListener('mouseup', this.stopDragOverview);
-    if (this.map) this.map.destroy();
-    if (this.overviewMap) this.overviewMap.destroy();
+    if (this.map) this.map.remove();
+    if (this.overviewMap) this.overviewMap.remove();
   }
 };
 </script>

@@ -16,14 +16,14 @@
       <div class="header-tabs-row">
         <div class="header-tabs">
           <button 
-            :class="['tab-btn', { active: activeTab === 'event' }]"
-            @click="activeTab = 'event'"
+            :class="['tab-btn', { active: currentLayer === 'event' }]"
+            @click="switchLayer('event')"
           >
             事件发生频次
           </button>
           <button 
-            :class="['tab-btn', { active: activeTab === 'security' }]"
-            @click="activeTab = 'security'"
+            :class="['tab-btn', { active: currentLayer === 'security' }]"
+            @click="switchLayer('security')"
           >
             国家安全等级
           </button>
@@ -62,16 +62,40 @@
       <!-- 右侧抽屉 -->
       <RightDrawer @toggle="onRightDrawerToggle" @select="onRightDrawerSelect" />
 
-      <!-- 右下角图例 -->
-      <div class="legend-panel">
-        <h4 class="legend-title">国家安全等级</h4>
-        <ul class="legend-list">
-          <li v-for="item in legendItems" :key="item.level">
-            <span class="legend-dot" :style="{ backgroundColor: item.color }"></span>
-            <span class="legend-label">{{ item.label }}</span>
-          </li>
-        </ul>
+      <!-- 国家详情面板 -->
+      <CountryDetailPanel 
+        :visible="showCountryDetail"
+        :country="focusedCountry"
+        @close="closeCountryDetail"
+      />
+
+      <!-- 事件时间轴 -->
+      <EventTimeline 
+        :countryCode="focusedCountry?.code || ''"
+        :countryName="focusedCountry?.name || '全球'"
+        @event-click="onTimelineEventClick"
+        @filter-apply="onTimelineFilter"
+      />
+
+      <!-- 底部坐标栏 -->
+      <div class="coord-bar">
+        <span class="coord-item">
+          <span class="coord-label">经度:</span>
+          <span class="coord-value">{{ mouseCoord.lng }}</span>
+        </span>
+        <span class="coord-item">
+          <span class="coord-label">纬度:</span>
+          <span class="coord-value">{{ mouseCoord.lat }}</span>
+        </span>
+        <span class="coord-item">
+          <span class="coord-label">缩放:</span>
+          <span class="coord-value">{{ mouseCoord.zoom }}</span>
+        </span>
       </div>
+
+      <!-- 动态图例 -->
+      <SecurityLegend v-if="currentLayer === 'security'" />
+      <EventFrequencyLegend v-if="currentLayer === 'event'" />
     </div>
   </div>
 </template>
@@ -82,14 +106,24 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import LeftDrawer from './LeftDrawer.vue'
 import RightDrawer from './RightDrawer.vue'
+import CountryDetailPanel from './CountryDetailPanel.vue'
+import EventTimeline from './EventTimeline.vue'
+import SecurityLegend from './SecurityLegend.vue'
+import EventFrequencyLegend from './EventFrequencyLegend.vue'
+import { getChineseName } from '@/data/countryNames'
+import { getCountrySecurityColor, getSecurityLevel } from '@/data/securityLevels'
+import { getCountryFrequencyColor } from '@/data/eventFrequency'
 
 // 状态
-const activeTab = ref('security')
+const currentLayer = ref('security')
 const searchQuery = ref('')
 const mapContainer = ref(null)
 const miniMapContainer = ref(null)
 const miniMapWrapper = ref(null)
 const showMiniMap = ref(false)
+const showCountryDetail = ref(false)
+const focusedCountry = ref(null)
+const mouseCoord = ref({ lng: '---', lat: '---', zoom: '---' })
 
 let map = null
 let miniMap = null
@@ -99,6 +133,8 @@ let geojsonData = null
 let currentCountryBounds = null
 let selectedLayers = []
 let diaoyuMarker = null
+let countryLayers = {}  // code -> layer[]
+let lastHoveredCode = null
 
 // 初始化地图
 onMounted(async () => {
@@ -113,7 +149,7 @@ onMounted(async () => {
     map = L.map(mapContainer.value, {
       center: [35, 105],
       zoom: 4,
-      minZoom: 3,
+      minZoom: 4,
       maxZoom: 7,
       zoomControl: true,
       attributionControl: false,
@@ -127,7 +163,7 @@ onMounted(async () => {
     // 添加天地图瓦片底图
     L.tileLayer('/tiles/vec_w/{z}/{y}/{x}.png', {
       maxZoom: 7,
-      minZoom: 3,
+      minZoom: 4,
       noWrap: true,
       bounds: bounds
     }).addTo(map)
@@ -135,28 +171,49 @@ onMounted(async () => {
     // 添加天地图注记
     L.tileLayer('/tiles/cva_w/{z}/{y}/{x}.png', {
       maxZoom: 7,
-      minZoom: 3,
+      minZoom: 4,
       noWrap: true,
       bounds: bounds
     }).addTo(map)
+    
+    // 绑定鼠标移动事件更新坐标
+    map.on('mousemove', (e) => {
+      mouseCoord.value = {
+        lng: e.latlng.lng.toFixed(4) + '°',
+        lat: e.latlng.lat.toFixed(4) + '°',
+        zoom: map.getZoom()
+      }
+    })
     
     // 加载国家边界 GeoJSON
     try {
       const response = await fetch('/data/countries.geojson')
       geojsonData = await response.json()
       
+      // 处理台湾属于中国
+      geojsonData.features.forEach(f => {
+        if (f.properties['ISO3166-1-Alpha-3'] === 'TWN') {
+          f.properties['ISO3166-1-Alpha-3'] = 'CHN'
+        }
+      })
+      
       countriesLayer = L.geoJSON(geojsonData, {
-        style: {
-          fillColor: 'transparent',
-          fillOpacity: 0,
-          color: 'transparent',
-          weight: 0,
-          className: 'country-layer'
-        },
+        style: (feature) => getFeatureStyle(feature),
         onEachFeature: (feature, layer) => {
-          layer.on('click', () => {
-            onCountryClick(feature, layer)
-          })
+          const code = feature.properties['ISO3166-1-Alpha-3'] || feature.properties.ISO_A3 || feature.properties.ADM0_A3 || ''
+          const name = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN || ''
+          const chineseName = code === 'CHN' ? '中国' : getChineseName(name)
+          
+          // 存储图层引用
+          if (!countryLayers[code]) {
+            countryLayers[code] = []
+          }
+          countryLayers[code].push(layer)
+          
+          // 绑定事件
+          layer.on('click', () => onCountryClick(code, chineseName))
+          layer.on('mouseover', () => onCountryHover(code, layer))
+          layer.on('mouseout', () => onCountryOut(code))
         }
       }).addTo(map)
     } catch (error) {
@@ -168,8 +225,181 @@ onMounted(async () => {
   }
 })
 
-// 点击国家时聚焦并显示小地图
-const onCountryClick = (feature, layer) => {
+// 获取国家样式
+const getFeatureStyle = (feature) => {
+  const code = feature.properties['ISO3166-1-Alpha-3'] || feature.properties.ISO_A3 || feature.properties.ADM0_A3 || ''
+  const style = getCountryStyle(code)
+  const isChina = code === 'CHN'
+  
+  return {
+    fillColor: style.color,
+    fillOpacity: style.opacity,
+    color: isChina ? '#ff0000' : '#ffffff',
+    weight: isChina ? 2 : 1,
+    opacity: 0.8
+  }
+}
+
+// 根据当前图层获取国家样式
+const getCountryStyle = (code) => {
+  if (currentLayer.value === 'security') {
+    const color = getCountrySecurityColor(code)
+    const level = getSecurityLevel(code)
+    return { color, opacity: level === 0 ? 0.5 : 0.6 }
+  } else {
+    const color = getCountryFrequencyColor(code)
+    return { color, opacity: 0.7 }
+  }
+}
+
+// 切换图层
+const switchLayer = (layer) => {
+  currentLayer.value = layer
+  applyCurrentLayer()
+}
+
+// 应用当前图层样式
+const applyCurrentLayer = () => {
+  Object.keys(countryLayers).forEach(code => {
+    if (focusedCountry.value?.code === code) return
+    
+    const style = getCountryStyle(code)
+    const isChina = code === 'CHN'
+    const layers = countryLayers[code] || []
+    layers.forEach(layer => {
+      layer.setStyle({
+        fillColor: style.color,
+        fillOpacity: style.opacity,
+        color: isChina ? '#ff0000' : '#ffffff',
+        weight: isChina ? 2 : 1
+      })
+    })
+  })
+}
+
+// 点击国家
+const onCountryClick = (code, name) => {
+  if (code === 'TWN') {
+    code = 'CHN'
+    name = '中国'
+  }
+  focusOnCountry(code, name)
+}
+
+// 鼠标悬浮国家
+const onCountryHover = (code) => {
+  if (code === 'TWN') code = 'CHN'
+  if (lastHoveredCode === code) return
+  
+  if (lastHoveredCode) {
+    restoreCountryStyle(lastHoveredCode)
+  }
+  
+  lastHoveredCode = code
+  
+  if (focusedCountry.value?.code !== code) {
+    const layers = countryLayers[code] || []
+    const style = getCountryStyle(code)
+    layers.forEach(layer => {
+      layer.setStyle({
+        fillColor: style.color,
+        fillOpacity: 0.9,
+        color: '#333333',
+        weight: 2,
+        opacity: 1
+      })
+    })
+  }
+}
+
+// 鼠标离开国家
+const onCountryOut = (code) => {
+  // 由 onCountryHover 处理恢复
+}
+
+// 恢复国家样式
+const restoreCountryStyle = (code) => {
+  const layers = countryLayers[code] || []
+  const style = getCountryStyle(code)
+  const isChina = code === 'CHN'
+  layers.forEach(layer => {
+    layer.setStyle({
+      fillColor: style.color,
+      fillOpacity: style.opacity,
+      color: isChina ? '#ff0000' : '#ffffff',
+      weight: isChina ? 2 : 1,
+      opacity: 0.8
+    })
+  })
+}
+
+// 聚焦到国家
+const focusOnCountry = (code, name) => {
+  if (focusedCountry.value) {
+    restoreCountryStyle(focusedCountry.value.code)
+  }
+  
+  focusedCountry.value = { code, name }
+  
+  const layers = countryLayers[code] || []
+  layers.forEach(layer => {
+    layer.setStyle({
+      fillColor: '#2196F3',
+      fillOpacity: 0.4,
+      color: '#1565C0',
+      weight: 3
+    })
+  })
+  
+  // 飞到该国家
+  if (layers.length > 0) {
+    const bounds = L.featureGroup(layers).getBounds()
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 6 })
+    currentCountryBounds = bounds
+  }
+  
+  // 如果是中国，添加钓鱼岛标记
+  if (code === 'CHN') {
+    addDiaoyuMarker()
+  }
+  
+  showMiniMap.value = true
+  showCountryDetail.value = true
+  
+  setTimeout(() => {
+    initMiniMap(currentCountryBounds)
+  }, 100)
+}
+
+// 添加钓鱼岛标记
+const addDiaoyuMarker = () => {
+  if (diaoyuMarker) {
+    map.removeLayer(diaoyuMarker)
+  }
+  
+  diaoyuMarker = L.circleMarker([25.75, 123.47], {
+    radius: 12,
+    fillColor: '#2196F3',
+    fillOpacity: 0.7,
+    color: '#1565C0',
+    weight: 3
+  })
+  
+  diaoyuMarker.bindTooltip('钓鱼岛', {
+    permanent: false,
+    direction: 'top',
+    offset: [0, -10]
+  })
+  
+  if (map.getZoom() >= 6) {
+    diaoyuMarker.addTo(map)
+  }
+  
+  map.on('zoomend', updateDiaoyuVisibility)
+}
+
+// 点击国家时聚焦并显示小地图（旧方法保留兼容）
+const onCountryClickOld = (feature, layer) => {
   const countryName = feature.properties.NAME || feature.properties.ADMIN || feature.properties.name || '未知'
   const countryCode = feature.properties.ISO_A3 || feature.properties.ADM0_A3 || feature.properties['ISO3166-1-Alpha-3'] || ''
   console.log('点击国家:', countryName, countryCode)
@@ -218,21 +448,29 @@ const onCountryClick = (feature, layer) => {
       })
     })
     
-    // 如果是中国，添加钓鱼岛标记
+    // 如果是中国，添加钓鱼岛标记（只在缩放级别>=6时显示）
     if (isChina) {
       diaoyuMarker = L.circleMarker([25.75, 123.47], {
-        radius: 6,
+        radius: 12,
         fillColor: '#e74c3c',
         fillOpacity: 0.7,
         color: '#c0392b',
-        weight: 2
-      }).addTo(map)
+        weight: 3
+      })
       
       diaoyuMarker.bindTooltip('钓鱼岛', {
         permanent: false,
         direction: 'top',
-        offset: [0, -5]
+        offset: [0, -10]
       })
+      
+      // 根据当前缩放级别决定是否显示
+      if (map.getZoom() >= 6) {
+        diaoyuMarker.addTo(map)
+      }
+      
+      // 监听缩放事件，动态显示/隐藏钓鱼岛标记
+      map.on('zoomend', updateDiaoyuVisibility)
     }
   }, 300)
   
@@ -273,9 +511,29 @@ const resetSelectedLayers = () => {
   })
   selectedLayers = []
   
+  // 移除缩放监听
+  if (map) {
+    map.off('zoomend', updateDiaoyuVisibility)
+  }
+  
   if (diaoyuMarker) {
     map.removeLayer(diaoyuMarker)
     diaoyuMarker = null
+  }
+}
+
+// 根据缩放级别更新钓鱼岛标记显示
+const updateDiaoyuVisibility = () => {
+  if (!diaoyuMarker || !map) return
+  
+  if (map.getZoom() >= 6) {
+    if (!map.hasLayer(diaoyuMarker)) {
+      diaoyuMarker.addTo(map)
+    }
+  } else {
+    if (map.hasLayer(diaoyuMarker)) {
+      map.removeLayer(diaoyuMarker)
+    }
   }
 }
 
@@ -388,7 +646,14 @@ const initMiniMap = (countryBounds) => {
 // 关闭小地图
 const closeMiniMap = () => {
   showMiniMap.value = false
+  showCountryDetail.value = false
   currentCountryBounds = null
+  
+  // 恢复聚焦国家的样式
+  if (focusedCountry.value) {
+    restoreCountryStyle(focusedCountry.value.code)
+    focusedCountry.value = null
+  }
   
   resetSelectedLayers()
   
@@ -397,6 +662,14 @@ const closeMiniMap = () => {
     miniMap = null
     viewRectangle = null
   }
+  
+  // 回到初始视图
+  map.setView([35, 105], 4)
+}
+
+// 关闭国家详情面板
+const closeCountryDetail = () => {
+  showCountryDetail.value = false
 }
 
 // 拖动小地图窗口
@@ -443,6 +716,8 @@ const onLeftDrawerToggle = (collapsed) => console.log('左侧抽屉:', collapsed
 const onLeftDrawerSelect = (id) => console.log('左侧选择:', id)
 const onRightDrawerToggle = (collapsed) => console.log('右侧抽屉:', collapsed ? '收起' : '展开')
 const onRightDrawerSelect = (id) => console.log('右侧选择:', id)
+const onTimelineEventClick = (e) => console.log('时间轴事件:', e)
+const onTimelineFilter = (f) => console.log('时间轴筛选:', f)
 
 // 清理地图
 onUnmounted(() => {
@@ -455,17 +730,6 @@ onUnmounted(() => {
     map = null
   }
 })
-
-// 图例配置
-const legendItems = [
-  { level: 1, label: '极高风险 (-3)', color: '#8B0000' },
-  { level: 2, label: '高风险 (-2)', color: '#DC143C' },
-  { level: 3, label: '较高风险 (-1)', color: '#FF6347' },
-  { level: 4, label: '中性 (0)', color: '#FFD700' },
-  { level: 5, label: '较安全 (1)', color: '#90EE90' },
-  { level: 6, label: '安全 (2)', color: '#32CD32' },
-  { level: 7, label: '非常安全 (3)', color: '#228B22' }
-]
 </script>
 
 
@@ -683,51 +947,37 @@ const legendItems = [
   background: #40a9ff;
 }
 
-/* 图例面板 */
-.legend-panel {
+/* 底部坐标栏 */
+.coord-bar {
   position: absolute;
-  bottom: 30px;
-  right: 10px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 4px;
-  padding: 12px 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  min-width: 140px;
-}
-
-.legend-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-  margin: 0 0 10px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #eee;
-}
-
-.legend-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.legend-list li {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: rgba(15, 23, 42, 0.9);
+  border-top: 1px solid rgba(100, 150, 255, 0.2);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 0;
+  padding: 0 20px;
+  gap: 30px;
+  z-index: 998;
+}
+
+.coord-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.coord-label {
   font-size: 12px;
-  color: #666;
+  color: #64748b;
 }
 
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.legend-label {
-  white-space: nowrap;
+.coord-value {
+  font-size: 12px;
+  color: #4fc3f7;
+  font-family: 'Consolas', monospace;
+  min-width: 80px;
 }
 </style>
